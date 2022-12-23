@@ -6,7 +6,7 @@
  * @flow strict-local
  */
 
-import React from 'react';
+import React, {useEffect, useState} from 'react';
 import type {Node} from 'react';
 import {
   SafeAreaView,
@@ -28,6 +28,7 @@ import {
 
 /* $FlowFixMe[missing-local-annot] The type annotation(s) required by Flow's
  * LTI update could not be added via codemod */
+
 const Section = ({children, title}): Node => {
   const isDarkMode = useColorScheme() === 'dark';
   return (
@@ -57,6 +58,20 @@ const Section = ({children, title}): Node => {
 const App: () => Node = () => {
   const isDarkMode = useColorScheme() === 'dark';
 
+  const [isLoading, setIsLoading] = useState(true);
+  const [data, setData] = useState<any>([]);
+
+  useEffect(() => {
+    fetch('https://api.weather.gov/points/47.7384,-121.0912')
+      .then(response => response.json())
+      .then(json => {
+        setData(json);
+        console.log(json.properties.relativeLocation.properties.city);
+      })
+      .catch(error => console.error(error))
+      .finally(() => setIsLoading(false));
+  }, []);
+
   const backgroundStyle = {
     backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
   };
@@ -76,8 +91,12 @@ const App: () => Node = () => {
             backgroundColor: isDarkMode ? Colors.black : Colors.white,
           }}>
           <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.js</Text> to change this
-            screen and then come back to see your edits.
+            <Text>
+              {data
+                ? `${data.properties.relativeLocation.properties.city}`
+                : 'NO DATA'}
+            </Text>{' '}
+            TEST
           </Section>
           <Section title="See Your Changes">
             <ReloadInstructions />
