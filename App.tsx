@@ -60,16 +60,52 @@ const App: () => Node = () => {
 
   const [isLoading, setIsLoading] = useState(true);
   const [data, setData] = useState<any>([]);
+  const [hourlyForeCastData, setHourlyForeCastData] = useState<any>([]);
 
   useEffect(() => {
-    fetch('https://api.weather.gov/points/47.7384,-121.0912')
-      .then(response => response.json())
-      .then(json => {
-        setData(json);
-        console.log(json.properties.relativeLocation.properties.city);
-      })
-      .catch(error => console.error(error))
-      .finally(() => setIsLoading(false));
+    const getLatLongBasedData = () => {
+      fetch('https://api.weather.gov/points/47.7384,-121.0912')
+        .then(response => response.json())
+        .then(json => {
+          setData(prevData => {
+            // console.log(
+            //   'PREV: ',
+            //   prevData,
+            //   prevData.length
+            //     ? prevData.properties.relativeLocation.properties.city
+            //     : 'no city',
+            // );
+            // console.log(
+            //   'JSON: ',
+            //   json,
+            //   json ? json.properties.relativeLocation.properties.city : 'no city',
+            // );
+            return [json];
+          });
+          return json;
+        })
+        .then(json => {
+          const url = json.properties.forecastHourly;
+          getLatLongHourlyForecast(url);
+        })
+        .catch(error => console.error(error))
+        .finally(() => setIsLoading(false));
+    };
+
+    const getLatLongHourlyForecast = url => {
+      fetch(url)
+        .then(response => response.json())
+        .then(json => {
+          setHourlyForeCastData(prevData => {
+            return [json];
+          });
+        })
+        .catch(error => console.error(error))
+        .finally(() => setIsLoading(false));
+    };
+
+    // set this up to be promise so we can then request hourly forecast?
+    getLatLongBasedData();
   }, []);
 
   const backgroundStyle = {
@@ -85,18 +121,31 @@ const App: () => Node = () => {
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         style={backgroundStyle}>
-        <Header />
         <View
           style={{
             backgroundColor: isDarkMode ? Colors.black : Colors.white,
           }}>
-          <Section title="Step One">
+          <Section title="City">
             <Text>
-              {data
-                ? `${data.properties.relativeLocation.properties.city}`
+              {data.length
+                ? `${data[0].properties.relativeLocation.properties.city}`
                 : 'NO DATA'}
-            </Text>{' '}
-            TEST
+            </Text>
+          </Section>
+          <Section title="Forecast Hourly">
+            <Text>
+              Time:{' '}
+              {hourlyForeCastData.length
+                ? `${hourlyForeCastData[0].properties.generatedAt}`
+                : 'NO DATA'}{' '}
+            </Text>
+
+            <Text>
+              Elevation:{' '}
+              {hourlyForeCastData.length
+                ? `${hourlyForeCastData[0].properties.elevation.value}`
+                : 'NO DATA'}
+            </Text>
           </Section>
           <Section title="See Your Changes">
             <ReloadInstructions />
