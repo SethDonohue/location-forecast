@@ -18,13 +18,7 @@ import {
   View,
 } from 'react-native';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+import {Colors} from 'react-native/Libraries/NewAppScreen';
 
 /* $FlowFixMe[missing-local-annot] The type annotation(s) required by Flow's
  * LTI update could not be added via codemod */
@@ -60,28 +54,29 @@ const App: () => Node = () => {
 
   const [isLoading, setIsLoading] = useState(true);
   const [data, setData] = useState<any>([]);
+  const [openWeatherMainData, setOpenWeatherMainData] = useState<any>([]);
   const [hourlyForeCastData, setHourlyForeCastData] = useState<any>([]);
 
+  const [hourlyError, setHourlyError] = useState<string>('');
+  const [mainForecastError, setMainForecastError] = useState<string>('');
+  const [openWeatherMainForecastError, setOpenWeatherMainForecastError] =
+    useState<string>('');
+
   useEffect(() => {
-    const getLatLongBasedData = () => {
+    const getNWSLatLongBasedData = () => {
       fetch('https://api.weather.gov/points/47.7384,-121.0912')
         .then(response => response.json())
         .then(json => {
-          setData(prevData => {
-            // console.log(
-            //   'PREV: ',
-            //   prevData,
-            //   prevData.length
-            //     ? prevData.properties.relativeLocation.properties.city
-            //     : 'no city',
-            // );
-            // console.log(
-            //   'JSON: ',
-            //   json,
-            //   json ? json.properties.relativeLocation.properties.city : 'no city',
-            // );
-            return [json];
-          });
+          if (json && json.status === 503) {
+            setMainForecastError(
+              'Main NWS Service Unavailable at this time. Please try again shortly.',
+            );
+            throw 'Main NWS Service Unavailable at this time. Please try again shortly.';
+          } else {
+            console.log('DATA JSON: ', json);
+            console.log(json.properties.relativeLocation.properties.city);
+            setData(json);
+          }
           return json;
         })
         .then(json => {
@@ -92,25 +87,97 @@ const App: () => Node = () => {
         .finally(() => setIsLoading(false));
     };
 
-    const getLatLongHourlyForecast = url => {
+    const getOpenWeatherLatLongCurrentData = () => {
+      const tempAPIKey = '8c56de359ba99481b988e9a6f4ea8223';
+      fetch(
+        `https://api.openweathermap.org/data/2.5/weather?lat=47.7384&lon=-121.0912&appid=${tempAPIKey}`,
+      )
+        .then(response => response.json())
+        .then(json => {
+          if (json && json.status === 503) {
+            setOpenWeatherMainForecastError(
+              'Main Open Weather Service Unavailable at this time. Please try again shortly.',
+            );
+            throw 'Main Open Weather Service Unavailable at this time. Please try again shortly.';
+          } else {
+            console.log('Open Weather JSON: ', json);
+            setOpenWeatherMainData(json);
+          }
+          // return json;
+        })
+        // .then(json => {
+        //   const url = json.properties.forecastHourly;
+        //   getLatLongHourlyForecast(url);
+        // })
+        .catch(error => console.error(error))
+        .finally(() => setIsLoading(false));
+    };
+
+    const getOpenWeatherOneCallData = () => {
+      const tempAPIKey = '8c56de359ba99481b988e9a6f4ea8223';
+      fetch(
+        `https://api.openweathermap.org/data/3.0/onecall?lat=47.7384&lon=-121.0912&appid=${tempAPIKey}`,
+      )
+        .then(response => response.json())
+        .then(json => {
+          if (json && json.status === 503) {
+            setOpenWeatherMainForecastError(
+              'Main Open Weather Service Unavailable at this time. Please try again shortly.',
+            );
+            throw 'Main Open Weather Service Unavailable at this time. Please try again shortly.';
+          } else {
+            console.log('Open Weather ONE CALL: ', json);
+            setOpenWeatherMainData(json);
+          }
+          // return json;
+        })
+        // .then(json => {
+        //   const url = json.properties.forecastHourly;
+        //   getLatLongHourlyForecast(url);
+        // })
+        .catch(error => console.error(error))
+        .finally(() => setIsLoading(false));
+    };
+
+    const getLatLongHourlyForecast = (url: string) => {
       fetch(url)
         .then(response => response.json())
         .then(json => {
-          setHourlyForeCastData(prevData => {
-            return [json];
-          });
+          console.log('hourly json: ', json);
+          if (json && json.status === 503) {
+            setHourlyError(
+              '503: Hourly Service Unavailable at this time. Please try again shortly.',
+            );
+            throw 'Hourly Service Unavailable at this time. Please try again shortly.';
+          } else {
+            setHourlyForeCastData(prevData => {
+              // TODO: remove prevData callback?
+              return json;
+            });
+          }
         })
         .catch(error => console.error(error))
         .finally(() => setIsLoading(false));
     };
 
-    // set this up to be promise so we can then request hourly forecast?
-    getLatLongBasedData();
+    // getNWSLatLongBasedData();
+    getOpenWeatherLatLongCurrentData();
+    getOpenWeatherOneCallData();
   }, []);
 
   const backgroundStyle = {
     backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
   };
+
+  const time: string =
+    !hourlyError && hourlyForeCastData.properties
+      ? `${hourlyForeCastData.properties.generatedAt}`
+      : 'NO TIME DATA';
+
+  const elevation: string =
+    !hourlyError && hourlyForeCastData.properties
+      ? `${hourlyForeCastData[0].properties.elevation.value}`
+      : 'NO ELEVATION DATA';
 
   return (
     <SafeAreaView style={backgroundStyle}>
@@ -127,36 +194,26 @@ const App: () => Node = () => {
           }}>
           <Section title="City">
             <Text>
-              {data.length
-                ? `${data[0].properties.relativeLocation.properties.city}`
-                : 'NO DATA'}
+              {data.properties
+                ? `${data.properties.relativeLocation.properties.city}`
+                : 'NO CITY DATA'}
             </Text>
           </Section>
           <Section title="Forecast Hourly">
-            <Text>
-              Time:{' '}
-              {hourlyForeCastData.length
-                ? `${hourlyForeCastData[0].properties.generatedAt}`
-                : 'NO DATA'}{' '}
-            </Text>
-
-            <Text>
-              Elevation:{' '}
-              {hourlyForeCastData.length
-                ? `${hourlyForeCastData[0].properties.elevation.value}`
-                : 'NO DATA'}
-            </Text>
+            {hourlyError ? (
+              <Text>{hourlyError}</Text>
+            ) : (
+              <>
+                <Text>Time: {time}</Text>
+                {'\n'}
+                <Text>Elevation: {elevation}</Text>
+              </>
+            )}
           </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
+          {/* <Section title="Learn More">
             Read the docs to discover what to do next:
           </Section>
-          <LearnMoreLinks />
+          <LearnMoreLinks /> */}
         </View>
       </ScrollView>
     </SafeAreaView>
