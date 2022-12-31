@@ -1,11 +1,3 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- * @flow strict-local
- */
-
 import React, {useEffect, useState} from 'react';
 import type {Node} from 'react';
 import {
@@ -17,8 +9,9 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-
 import {Colors} from 'react-native/Libraries/NewAppScreen';
+
+import * as keys from './keys';
 
 /* $FlowFixMe[missing-local-annot] The type annotation(s) required by Flow's
  * LTI update could not be added via codemod */
@@ -52,132 +45,249 @@ const Section = ({children, title}): Node => {
 const App: () => Node = () => {
   const isDarkMode = useColorScheme() === 'dark';
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [data, setData] = useState<any>([]);
-  const [openWeatherMainData, setOpenWeatherMainData] = useState<any>([]);
-  const [hourlyForeCastData, setHourlyForeCastData] = useState<any>([]);
+  const [isLoadingNWSLatLong, setIsLoadingNWSLatLong] = useState(true);
+  const [latLongNWSMainData, setLatLongNWSMainData] = useState<any>([]);
+  const [latLongNWSMainError, setLatLongNWSMainError] = useState<string>('');
 
-  const [hourlyError, setHourlyError] = useState<string>('');
-  const [mainForecastError, setMainForecastError] = useState<string>('');
+  const [isLoadingNWSForecast, setIsLoadingNWSForecast] = useState(true);
+  const [foreCastNWSData, setForeCastNWSData] = useState<any>([]);
+  const [foreCastNWSError, setForeCastNWSError] = useState<string>('');
+
+  const [openWeatherIsLoading, setOpenWeatherIsLoading] = useState(true);
+  const [openWeatherMainData, setOpenWeatherMainData] = useState<any>([]);
   const [openWeatherMainForecastError, setOpenWeatherMainForecastError] =
     useState<string>('');
 
+  const [tomorrowIsLoading, setTomorrowIsLoading] = useState(true);
+  const [tomorrow5dForecastData, setTomorrow5dForecastData] = useState<any>([]);
+  const [tomorrowForecastError, setTomorrowForecastError] =
+    useState<string>('');
+
   useEffect(() => {
-    const getNWSLatLongBasedData = () => {
-      fetch('https://api.weather.gov/points/47.7384,-121.0912')
-        .then(response => response.json())
-        .then(json => {
-          if (json && json.status === 503) {
-            setMainForecastError(
-              'Main NWS Service Unavailable at this time. Please try again shortly.',
-            );
-            throw 'Main NWS Service Unavailable at this time. Please try again shortly.';
-          } else {
-            console.log('DATA JSON: ', json);
-            console.log(json.properties.relativeLocation.properties.city);
-            setData(json);
+    /***** NWS API (weather.gov) */
+    const getNWSLatLongBasedData = (lat: number, long: number) => {
+      let NWSError: Error | null = null;
+      fetch(`https://api.weather.gov/points/${lat},${long}`)
+        .then(response => {
+          if (!response.ok) {
+            const message: string = response.statusText
+              ? response.statusText
+              : response.detail
+              ? response.detail
+              : 'No Error message from NWS Lat Long request';
+
+            setLatLongNWSMainError(message);
+
+            throw Error(message);
           }
+          return response.json();
+        })
+        .then(json => {
+          setLatLongNWSMainData([{...json}]);
           return json;
         })
         .then(json => {
-          const url = json.properties.forecastHourly;
-          getLatLongHourlyForecast(url);
-        })
-        .catch(error => console.error(error))
-        .finally(() => setIsLoading(false));
-    };
-
-    const getOpenWeatherLatLongCurrentData = () => {
-      const tempAPIKey = '8c56de359ba99481b988e9a6f4ea8223';
-      fetch(
-        `https://api.openweathermap.org/data/2.5/weather?lat=47.7384&lon=-121.0912&appid=${tempAPIKey}`,
-      )
-        .then(response => response.json())
-        .then(json => {
-          if (json && json.status === 503) {
-            setOpenWeatherMainForecastError(
-              'Main Open Weather Service Unavailable at this time. Please try again shortly.',
-            );
-            throw 'Main Open Weather Service Unavailable at this time. Please try again shortly.';
+          if (json.properties && json.properties.forecast) {
+            getNWSForecast(json.properties.forecast);
           } else {
-            console.log('Open Weather JSON: ', json);
-            setOpenWeatherMainData(json);
+            throw Error('No valid URL for NWS Forecast');
           }
-          // return json;
         })
-        // .then(json => {
-        //   const url = json.properties.forecastHourly;
-        //   getLatLongHourlyForecast(url);
-        // })
-        .catch(error => console.error(error))
-        .finally(() => setIsLoading(false));
+        .catch(error => {
+          NWSError = error;
+          console.error(error);
+        })
+        .finally(() => {
+          setIsLoadingNWSLatLong(false);
+        });
+
+      return NWSError;
     };
 
+    const getNWSForecast = (url: string) => {
+      fetch(url)
+        .then(response => {
+          // console.log('OK check: ', response.ok);
+          if (!response.ok) {
+            const message: string = response.statusText
+              ? response.statusText
+              : response.detail
+              ? response.detail
+              : `${response.status}: No Error message from NWS Forecast request!`;
+
+            setForeCastNWSError(message);
+
+            throw Error(message);
+          }
+          return response.json();
+        })
+        .then(json => {
+          setForeCastNWSData([{...json}]);
+        })
+        .catch(error => {
+          console.error(error, error.stack);
+        })
+        .finally(() => {
+          setIsLoadingNWSForecast(false);
+        });
+    };
+
+    /***** OPEN WEATHER API */
     const getOpenWeatherOneCallData = () => {
-      const tempAPIKey = '8c56de359ba99481b988e9a6f4ea8223';
+      const tempAPIKey = keys.openWeatherAPIKey;
       fetch(
         `https://api.openweathermap.org/data/3.0/onecall?lat=47.7384&lon=-121.0912&appid=${tempAPIKey}`,
       )
-        .then(response => response.json())
-        .then(json => {
-          if (json && json.status === 503) {
-            setOpenWeatherMainForecastError(
-              'Main Open Weather Service Unavailable at this time. Please try again shortly.',
-            );
-            throw 'Main Open Weather Service Unavailable at this time. Please try again shortly.';
-          } else {
-            console.log('Open Weather ONE CALL: ', json);
-            setOpenWeatherMainData(json);
+        .then(response => {
+          if (!response.ok) {
+            const message: string = response.statusText
+              ? response.statusText
+              : response.detail
+              ? response.detail
+              : 'No Error message from Open Weather One Call request';
+
+            setOpenWeatherMainForecastError(message);
+            throw Error(message);
           }
-          // return json;
+          return response.json();
         })
-        // .then(json => {
-        //   const url = json.properties.forecastHourly;
-        //   getLatLongHourlyForecast(url);
-        // })
+        .then(json => {
+          setOpenWeatherMainData([{...json}]);
+          return json;
+        })
         .catch(error => console.error(error))
-        .finally(() => setIsLoading(false));
+        .finally(() => setOpenWeatherIsLoading(false));
     };
 
-    const getLatLongHourlyForecast = (url: string) => {
+    /***** Tomorrow.io */
+    const getTomorrowIOForecastData = (lat: number, long: number) => {
+      const tempAPIKey = keys.tomorrowAPIKey;
+      // TODO: move callData outside for future options/cfg setup
+      const callData = {
+        latitude: lat,
+        longitude: long,
+        fields: [
+          'temperature',
+          'precipitationIntensity',
+          'precipitationType',
+          'windSpeed',
+          'windGust',
+          'windDirection',
+          'temperature',
+          'temperatureApparent',
+          'cloudCover',
+          'cloudBase',
+          'cloudCeiling',
+          'weatherCode',
+        ],
+        units: 'imperial',
+        timeSteps: '1d',
+        startTime: 'now',
+        endTime: 'nowPlus5d',
+        apiKey: tempAPIKey,
+      };
+
+      const {
+        latitude,
+        longitude,
+        fields,
+        units,
+        timeSteps,
+        startTime,
+        endTime,
+        apiKey,
+      } = callData;
+
+      const fieldsCreator = fields.reduce(
+        (prevVal: string, field: string) => prevVal + `&fields=${field}`,
+      );
+
+      const url: string = `https://api.tomorrow.io/v4/timelines?location=${latitude}%2C%20${longitude}&fields=${fieldsCreator}&units=${units}&timesteps=${timeSteps}&startTime=${startTime}&endTime=${endTime}&apikey=${apiKey}`;
+
+      // const urlTest: string = `https://api.tomorrow.io/v4/timelines?location=${latitude}%2C%20${longitude}&fields=temperature&fields=precipitationType&fields=precipitationIntensity&units=${units}&timesteps=${timeSteps}&startTime=${startTime}&endTime=${endTime}&apikey=${apiKey}"`;
+
+      // const works =
+      //   'https://api.tomorrow.io/v4/timelines?location=47.7384%2C%20-121.0912&fields=temperature&fields=precipitationType&fields=precipitationIntensity&units=imperial&timesteps=1d&startTime=now&endTime=nowPlus5d&apikey=lZyi4GrWbha18uknU8LWq4Ay4EVoQx73';
+
       fetch(url)
-        .then(response => response.json())
-        .then(json => {
-          console.log('hourly json: ', json);
-          if (json && json.status === 503) {
-            setHourlyError(
-              '503: Hourly Service Unavailable at this time. Please try again shortly.',
-            );
-            throw 'Hourly Service Unavailable at this time. Please try again shortly.';
-          } else {
-            setHourlyForeCastData(prevData => {
-              // TODO: remove prevData callback?
-              return json;
-            });
+        .then(response => {
+          // console.log({TomorrowResponse: response});
+
+          if (!response.ok) {
+            const message: string = response.statusText
+              ? response.statusText
+              : response.detail
+              ? response.detail
+              : 'No Error message from Tomorrow Forecast request';
+
+            setTomorrowForecastError(message);
+            throw Error(message);
           }
+          return response.json();
+        })
+        .then(json => {
+          // console.log({tomorrowJSON: json.data.timelines[0].intervals});
+          setTomorrow5dForecastData([...json.data.timelines]);
+          return json;
         })
         .catch(error => console.error(error))
-        .finally(() => setIsLoading(false));
+        .finally(() => setTomorrowIsLoading(false));
     };
 
-    // getNWSLatLongBasedData();
-    getOpenWeatherLatLongCurrentData();
-    getOpenWeatherOneCallData();
+    /***** API Calls */
+    const lat: number = 47.7384;
+    const long: number = -121.0912;
+    const NWSError = getNWSLatLongBasedData(lat, long);
+
+    // make alternate API calls if NWS fails
+    if (!NWSError) {
+      getOpenWeatherOneCallData();
+      getTomorrowIOForecastData(lat, long);
+    }
   }, []);
 
   const backgroundStyle = {
     backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
   };
 
-  const time: string =
-    !hourlyError && hourlyForeCastData.properties
-      ? `${hourlyForeCastData.properties.generatedAt}`
-      : 'NO TIME DATA';
+  let cityNWS = 'NO CITY DATA';
+  let timeNWS = 'NO TIME DATA';
+  let elevationNWS = 'NO ELEVATION DATA';
+  let periodsNWS = [];
 
-  const elevation: string =
-    !hourlyError && hourlyForeCastData.properties
-      ? `${hourlyForeCastData[0].properties.elevation.value}`
-      : 'NO ELEVATION DATA';
+  if (latLongNWSMainData.length && !latLongNWSMainError) {
+    cityNWS = `${latLongNWSMainData[0].properties.relativeLocation.properties.city}`;
+  }
+
+  if (foreCastNWSData.length && !foreCastNWSError) {
+    const {generatedAt, elevation, periods} = foreCastNWSData[0].properties;
+    timeNWS = `${generatedAt}`;
+
+    elevationNWS = `${elevation.value} feet`;
+
+    periodsNWS = periods;
+  }
+
+  const openWeatherAlert: string =
+    openWeatherMainData.length && openWeatherMainData[0].alerts
+      ? openWeatherMainData[0].alerts[0].description
+      : 'No Alerts';
+
+  const openWeatherAlertWhat: string =
+    openWeatherMainData.length && openWeatherMainData[0].alerts
+      ? openWeatherMainData[0].alerts[0].description.indexOf('* WHAT')
+      : '';
+
+  const openWeatherAlertWhere: string =
+    openWeatherMainData.length && openWeatherMainData[0].alerts
+      ? openWeatherMainData[0].alerts[0].description.indexOf('* WHERE')
+      : '';
+
+  const tomorrowIntervals: any = tomorrow5dForecastData.length
+    ? tomorrow5dForecastData[0].intervals
+    : [];
+
+  // console.log({tomorrowIntervals});
 
   return (
     <SafeAreaView style={backgroundStyle}>
@@ -187,29 +297,95 @@ const App: () => Node = () => {
       />
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{flexGrow: 1}}
         style={backgroundStyle}>
         <View
           style={{
             backgroundColor: isDarkMode ? Colors.black : Colors.white,
+            flex: 1,
           }}>
-          <Section title="City">
-            <Text>
-              {data.properties
-                ? `${data.properties.relativeLocation.properties.city}`
-                : 'NO CITY DATA'}
-            </Text>
+          <Section title="NWS - City">
+            <Text>{isLoadingNWSLatLong ? 'Loading...' : cityNWS}</Text>
           </Section>
-          <Section title="Forecast Hourly">
-            {hourlyError ? (
-              <Text>{hourlyError}</Text>
-            ) : (
+          <Section title="NWS - 14 Day Forecast">
+            {isLoadingNWSForecast ? (
+              <Text>Loading...</Text>
+            ) : !foreCastNWSError ? (
               <>
-                <Text>Time: {time}</Text>
+                <Text>Time: {timeNWS}</Text>
                 {'\n'}
-                <Text>Elevation: {elevation}</Text>
+                <Text>Elevation: {elevationNWS}</Text>
+                {'\n'}
+
+                {periodsNWS.map((period: any) => {
+                  return (
+                    <React.Fragment key={period.number}>
+                      <Text>{period.name}:</Text>
+                      {'\n'}
+                      <Text>{period.shortForecast}</Text>
+                      {'\n'}
+                      <Text>Temperature: {period.temperature} F</Text>
+                      {'\n'}
+                    </React.Fragment>
+                  );
+                })}
               </>
+            ) : (
+              <Text>{foreCastNWSError}</Text>
             )}
           </Section>
+          {!foreCastNWSData ? (
+            <>
+              <Section title="Open Weather Alerts">
+                {openWeatherMainForecastError ? (
+                  openWeatherMainForecastError
+                ) : openWeatherIsLoading ? (
+                  'Loading...'
+                ) : (
+                  <>
+                    {/* <Text style={{flex: 1}}>{openWeatherAlert}</Text> */}
+                    {'\n'}
+
+                    <Text>What: {openWeatherAlertWhat}</Text>
+                    {'\n'}
+
+                    <Text>Where: {openWeatherAlertWhere}</Text>
+                  </>
+                )}
+              </Section>
+              <Section title="Tomorrow.io 5 Day Forecast">
+                {tomorrowForecastError ? (
+                  tomorrowForecastError
+                ) : tomorrowIsLoading ? (
+                  'Loading...'
+                ) : (
+                  <>
+                    {tomorrowIntervals.map((interval: any) => {
+                      const startTime = interval.startTime;
+                      const values = interval.values;
+
+                      return (
+                        <React.Fragment key={startTime}>
+                          <Text>Time: {startTime}</Text>
+                          {'\n'}
+                          {Object.keys(values).map(key => (
+                            <React.Fragment key={key}>
+                              <Text>{key}</Text>
+                              {'\n'}
+                            </React.Fragment>
+                          ))}
+                          {'\n'}
+                        </React.Fragment>
+                      );
+                    })}
+                  </>
+                )}
+              </Section>
+            </>
+          ) : (
+            ''
+          )}
+
           {/* <Section title="Learn More">
             Read the docs to discover what to do next:
           </Section>
